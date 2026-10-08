@@ -2,7 +2,8 @@
 
 import { bearing, compassWord, legMinutes, neighbours, node } from './content/road';
 import { chestById, isOpen } from './content/chests';
-import { arrivalScene, pickEncounter, SCENES } from './content/scenes';
+import { arrivalScene, pickEncounter, SCENES, WINS } from './content/scenes';
+import { woundLines } from './combat';
 import {
   campEncounterChance, conscious, DAY, isNight, partyDown, passTime, roadEncounterChance,
 } from './rules';
@@ -146,8 +147,28 @@ export function choose(s: GameState, index: number): void {
   const choice = scene?.choices(s)[index];
   if (!choice) return;
   const r = choice.run(s);
+  if (r === 'combat') {
+    s.screen = 'combat';
+    return;
+  }
   note(s, r.title);
   show(s, r.title, r.lines);
+}
+
+/** Call after any combat action: when the fight is over, show how it went. */
+export function settleCombat(s: GameState): void {
+  const c = s.combat;
+  if (!c || !c.over) return;
+  const lines = [...c.intro];
+  if (c.over === 'won') lines.push(...WINS[c.win](s));
+  else if (c.over === 'broke') lines.push('The last of them break off and melt away. There is nothing to take.');
+  else if (c.over === 'fled') lines.push('You break away and run, and keep running until the sounds behind you stop.', ...passTime(s, 60, 'walk', { terrain: 2 }));
+  lines.push(...woundLines(s, c));
+  if (c.over === 'lost') lines.push('The road goes dark.');
+  s.combat = undefined;
+  s.flags.ambush = 0;
+  note(s, c.title);
+  show(s, c.over === 'fled' ? 'You run' : c.title, lines);
 }
 
 export function continueOn(s: GameState): void {

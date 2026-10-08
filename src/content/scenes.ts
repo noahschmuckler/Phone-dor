@@ -1,13 +1,16 @@
 // Scenes: arrival events and roadside encounters. A scene shows text and a few
 // choices; a choice mutates the state and returns a result card to show.
 
-import { conscious, fight, Foe, passTime, clamp, isNight } from '../rules';
+import { startCombat } from '../combat';
+import { conscious, passTime, clamp, isNight } from '../rules';
 import { GameState, Result, member, rand } from '../state';
+import { FoeKind } from './foes';
 
 export interface Choice {
   label: string;
   hint?: string;
-  run: (s: GameState) => Result;
+  /** A result card to show, or 'combat' when the choice starts a fight. */
+  run: (s: GameState) => Result | 'combat';
 }
 
 export interface Scene {
@@ -18,38 +21,66 @@ export interface Scene {
 
 const up = (s: GameState, id: 'oswin' | 'mael' | 'sefa') => conscious(member(s, id));
 
-/** Fight a foe and wrap the outcome in a result card. */
-function battle(s: GameState, foe: Foe, title: string, onWin: (s: GameState) => string[]): Result {
-  const ambush = !!s.flags.ambush;
+/**
+ * What happens when a fight is won, keyed so a fight in progress survives a
+ * reload. Each returns the lines for the result card and applies any spoils.
+ */
+export const WINS: Record<string, (s: GameState) => string[]> = {
+  wolves: () => ['The last of them limps off into the scrub, smoking where it bled.'],
+  'wolves-ration': () => ['They wanted more than bread. They got steel instead.'],
+  'wolves-cornered': () => ['You stand and drive them off.'],
+  brigands: (x) => {
+    x.coin += 2;
+    return ['The last of them break and run. One drops a purse with two coins in it, all he had.'];
+  },
+  'brigands-sefa': () => ['They come on anyway, and lose.'],
+  'brigands-cornered': () => ['You turn on them and they scatter.'],
+  deserters: (x) => {
+    x.coin += 5;
+    x.rations += 1;
+    return ['The sergeant goes down and the rest throw their swords in the ditch. You take their purse and a ration.'];
+  },
+  abomination: () => ['It comes apart into something like smoke and something like mud. Mael will not let anyone touch the remains.'],
+  'abomination-cornered': () => ['You kill it. You wish you had run faster.'],
+  marsh: () => ['It sinks back into the black water. The reeds close over it. Mael checks everyone\'s cuts twice.'],
+  'marsh-cornered': () => ['It catches you at the end of the causeway, and you kill it there.'],
+  cult: (x) => {
+    x.coin += 12;
+    x.chaos = clamp(x.chaos - 5, 0, 100);
+    x.flags.struckCult = 1;
+    return [
+      'The last of them dies shouting: "When the old ones rise, they\'ll remember who fed them!"',
+      'You take what coin you can carry. The silver you leave. It belongs to a chapel somewhere that no longer has a roof.',
+    ];
+  },
+  'cult-heist': (x) => {
+    x.coin += 6;
+    return ['Steel in the dark, and then quiet.'];
+  },
+};
+
+/** Start a tactical fight. Ambush (no watch, or a failed run) means they strike first. */
+function battle(s: GameState, foe: FoeKind, title: string, win: string, intro: string[] = [], ambush = false): 'combat' {
+  const surprised = ambush || !!s.flags.ambush;
   s.flags.ambush = 0;
-  const { outcome, lines } = fight(s, foe, ambush);
-  if (outcome === 'won') return { title, lines: [...onWin(s), ...lines] };
-  if (outcome === 'lost') return { title, lines: [...lines, 'The road goes dark.'] };
-  return { title, lines: [`The ${foe.name} break off and melt into the dark. Neither side won.`, ...lines] };
+  startCombat(s, { foe, win, title, intro, ambush: surprised });
+  return 'combat';
 }
 
 /** Try to run. Failure means fighting with the enemy striking first. */
-function flee(s: GameState, foe: Foe, onWin: (s: GameState) => string[]): Result {
+function flee(s: GameState, foe: FoeKind, win: string): Result | 'combat' {
   if (rand(s) < 0.55) {
     s.flags.ambush = 0;
     const lines = passTime(s, 60, 'walk', { terrain: 2 });
     return { title: 'You run', lines: ['You scatter, regroup a mile on, and walk the rest with your hearts going.', ...lines] };
   }
-  s.flags.ambush = 1;
-  const r = battle(s, foe, 'Cornered', onWin);
-  r.lines.unshift('They are faster than you.');
-  return r;
+  return battle(s, foe, 'Cornered', win, ['They are faster than you.'], true);
 }
 
 const ambushLine = (s: GameState) =>
   s.flags.ambush ? 'No one was watching. They are already among you. ' : '';
 
 // --- Roadside encounters -------------------------------------------------
-
-const WOLVES: Foe = { name: 'dire wolves', might: 5, hp: 30, taint: 2 };
-const BRIGANDS: Foe = { name: 'brigands', might: 4, hp: 24 };
-const DESERTERS: Foe = { name: 'deserters', might: 6, hp: 30 };
-const ABOMINATION: Foe = { name: 'abomination', might: 7, hp: 34, taint: 7 };
 
 export const ENCOUNTERS = ['enc:wolves', 'enc:brigands', 'enc:deserters', 'enc:abomination'] as const;
 
@@ -77,19 +108,19 @@ export const SCENES: Record<string, Scene> = {
     text: (s) =>
       `${ambushLine(s)}Wolves, too big and too quiet, eyes like coals in a banked fire. The grandmothers say the Eight drove them into the deep places. They are not in the deep places now.`,
     choices: (s) => [
-      { label: 'Fight', run: (st) => battle(st, WOLVES, 'The wolves', () => ['The last of them limps off into the scrub, smoking where it bled.']) },
+      { label: 'Fight', run: (st) => battle(st, 'wolves', 'The wolves', 'wolves') },
       ...(s.rations >= 1
         ? [{
             label: 'Throw them a ration and back away',
             hint: '−1 ration',
-            run: (st: GameState): Result => {
+            run: (st: GameState): Result | 'combat' => {
               st.rations -= 1;
               if (rand(st) < 0.7) return { title: 'The wolves', lines: ['They fall on the food. You do not run, and you do not look back.'] };
-              return battle(st, WOLVES, 'The wolves', () => ['They wanted more than bread. They got steel instead.']);
+              return battle(st, 'wolves', 'The wolves', 'wolves-ration', ['They swallow the bread and keep coming.']);
             },
           }]
         : []),
-      { label: 'Run', run: (st) => flee(st, WOLVES, () => ['You stand and drive them off.']) },
+      { label: 'Run', run: (st) => flee(st, 'wolves', 'wolves-cornered') },
     ],
   },
 
@@ -100,10 +131,7 @@ export const SCENES: Record<string, Scene> = {
     choices: (s) => [
       {
         label: 'Fight',
-        run: (st) => battle(st, BRIGANDS, 'The brigands', (x) => {
-          x.coin += 2;
-          return ['They break and run. One drops a purse with two coins in it, all he had.'];
-        }),
+        run: (st) => battle(st, 'brigands', 'The brigands', 'brigands'),
       },
       ...(s.rations >= 2
         ? [{
@@ -120,17 +148,15 @@ export const SCENES: Record<string, Scene> = {
         ? [{
             label: 'Let Sefa talk',
             hint: 'Keystone patter',
-            run: (st: GameState): Result => {
+            run: (st: GameState): Result | 'combat' => {
               if (rand(st) < 0.6) {
                 return { title: 'The brigands', lines: ['Sefa talks fast and low: the warden is Moot law, the healer is plague-touched, the purse is already spoken for by a Keystone house that collects. The billhooks drop. The men go.'] };
               }
-              const r = battle(st, BRIGANDS, 'The brigands', () => ['They come on anyway, and lose.']);
-              r.lines.unshift('"Keystone tongue," the oldest spits. "Gut that one first."');
-              return r;
+              return battle(st, 'brigands', 'The brigands', 'brigands-sefa', ['"Keystone tongue," the oldest spits. "Gut that one first."']);
             },
           }]
         : []),
-      { label: 'Run', run: (st) => flee(st, BRIGANDS, () => ['You turn on them and they scatter.']) },
+      { label: 'Run', run: (st) => flee(st, 'brigands', 'brigands-cornered') },
     ],
   },
 
@@ -141,11 +167,7 @@ export const SCENES: Record<string, Scene> = {
     choices: (s) => [
       {
         label: 'Fight',
-        run: (st) => battle(st, DESERTERS, 'The deserters', (x) => {
-          x.coin += 5;
-          x.rations += 1;
-          return ['The sergeant goes down and the rest throw their swords in the ditch. You take their purse and a ration.'];
-        }),
+        run: (st) => battle(st, 'deserters', 'The deserters', 'deserters'),
       },
       {
         label: 'Share the road and news',
@@ -179,8 +201,8 @@ export const SCENES: Record<string, Scene> = {
     text: (s) =>
       `${ambushLine(s)}It was a stag. It still has a stag's antlers, among other things. Where it walks, the grass grows the wrong way.`,
     choices: () => [
-      { label: 'Fight', run: (st) => battle(st, ABOMINATION, 'The abomination', () => ['It comes apart into something like smoke and something like mud. Mael will not let anyone touch the remains.']) },
-      { label: 'Run', run: (st) => flee(st, ABOMINATION, () => ['You kill it. You wish you had run faster.']) },
+      { label: 'Fight', run: (st) => battle(st, 'abomination', 'The abomination', 'abomination') },
+      { label: 'Run', run: (st) => flee(st, 'abomination', 'abomination-cornered') },
     ],
   },
 
@@ -310,8 +332,8 @@ export const SCENES: Record<string, Scene> = {
     text: () =>
       'Halfway along the causeway the reeds part. Something heaves up out of the water. It was a heron once. Or several.',
     choices: () => [
-      { label: 'Fight', run: (st) => battle(st, ABOMINATION, 'The abomination', () => ['It sinks back into the black water. The reeds close over it. Mael checks everyone\'s cuts twice.']) },
-      { label: 'Run for the far end', run: (st) => flee(st, ABOMINATION, () => ['It catches you at the end of the causeway, and you kill it there.']) },
+      { label: 'Fight', run: (st) => battle(st, 'abomination', 'The abomination', 'marsh') },
+      { label: 'Run for the far end', run: (st) => flee(st, 'abomination', 'marsh-cornered') },
     ],
   },
 
@@ -377,31 +399,18 @@ export const SCENES: Record<string, Scene> = {
     choices: (s) => [
       {
         label: 'Fall on them',
-        run: (st) => battle(st, { name: 'cultists', might: 5, hp: 30 }, 'The dragon cult', (x) => {
-          x.coin += 12;
-          x.chaos = clamp(x.chaos - 5, 0, 100);
-          x.flags.struckCult = 1;
-          return [
-            'The last of them dies shouting: "When the old ones rise, they\'ll remember who fed them!"',
-            'You take what coin you can carry. The silver you leave. It belongs to a chapel somewhere that no longer has a roof.',
-          ];
-        }),
+        run: (st) => battle(st, 'cultists', 'The dragon cult', 'cult'),
       },
       ...(up(s, 'sefa')
         ? [{
             label: 'Let Sefa lighten the wagon after dark',
-            run: (st: GameState): Result => {
+            run: (st: GameState): Result | 'combat' => {
               if (rand(st) < 0.6) {
                 st.coin += 8;
                 st.flags.robbedCult = 1;
                 return { title: 'The dragon cult', lines: ['Sefa comes back before moonset with eight coins and a cultist\'s red hood, and will not say what happened to the cultist.'] };
               }
-              const r = battle(st, { name: 'cultists', might: 5, hp: 30 }, 'The dragon cult', (x) => {
-                x.coin += 6;
-                return ['Steel in the dark, and then quiet.'];
-              });
-              r.lines.unshift('A shout. Torches. So much for quiet.');
-              return r;
+              return battle(st, 'cultists', 'The dragon cult', 'cult-heist', ['A shout. Torches. So much for quiet.']);
             },
           }]
         : []),

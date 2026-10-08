@@ -1,3 +1,5 @@
+import type { Combat } from './combat';
+
 // Game state, party roster, and persistence. Everything the game remembers
 // lives in one plain JSON-able object so saves are a single localStorage write.
 
@@ -18,7 +20,7 @@ export interface Member {
   taint: number;
 }
 
-export type Screen = 'title' | 'chapter' | 'road' | 'camp' | 'scene' | 'chest' | 'result' | 'defeat' | 'end';
+export type Screen = 'title' | 'chapter' | 'road' | 'camp' | 'scene' | 'chest' | 'combat' | 'result' | 'defeat' | 'end';
 
 export interface Result {
   title: string;
@@ -43,6 +45,8 @@ export interface GameState {
   scene?: string;
   /** Chest currently shown on the 'chest' screen. */
   chest?: string;
+  /** The fight in progress on the 'combat' screen. */
+  combat?: Combat;
   result?: Result;
   /** Scenes waiting to play after the current result is dismissed. */
   queue: string[];

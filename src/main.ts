@@ -1,9 +1,13 @@
 import './style.css';
 import { bearing, compassWord, EDGES, KARSTS, legMinutes, neighbours, node, NODES } from './content/road';
+import {
+  GRID_H, GRID_W, alive, autoResolve, canKnife, cheb, defend, endPartyPhase, engage, guard, moveTo, poultice, reach, retreat, select,
+  setMode, throwKnife, unitAt, wait, Unit,
+} from './combat';
 import { CHESTS, chestAt, chestById, isOpen, startPositions, wheelsFor } from './content/chests';
 import { SCENES } from './content/scenes';
 import {
-  buyRation, camp, choose, continueOn, fmtHours, innCost, leaveChest, lookAround, openChest, riseAgain, setOut, startChapter,
+  buyRation, camp, choose, continueOn, settleCombat, fmtHours, innCost, leaveChest, lookAround, openChest, riseAgain, setOut, startChapter,
   stayAtInn, travel, tryChest,
 } from './game';
 import { clock, conscious, hoursUntilMorning, isNight } from './rules';
@@ -166,6 +170,76 @@ function chestHtml(s: GameState): string {
     </div>`;
 }
 
+function combatHtml(s: GameState): string {
+  const c = s.combat;
+  if (!c) return '';
+  const sel = c.units.find((u) => u.id === c.selected && alive(s, u) && !u.acted);
+  const moves = sel && !sel.moved && !c.mode ? reach(s, c, sel) : new Map<string, number>();
+  const tiles: string[] = [];
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const u = unitAt(s, c, x, y);
+      const cls: string[] = ['tile'];
+      if (c.rocks.includes(`${x},${y}`)) cls.push('rock');
+      if (!u && moves.has(`${x},${y}`) && moves.get(`${x},${y}`)! > 0) cls.push('reach');
+      if (u && sel) {
+        if (u.side === 'foe' && !c.mode && (cheb(sel, u) <= 1 || (!sel.moved && [...moves].some(([k, n]) => n > 0 && cheb({ x: +k.split(',')[0], y: +k.split(',')[1] }, u) <= 1)))) cls.push('target');
+        if (u.side === 'foe' && c.mode === 'knife' && canKnife(s, sel, u)) cls.push('target', 'ranged');
+        if (u.side === 'party' && c.mode === 'poultice' && cheb(sel, u) <= 1) cls.push('heal');
+      }
+      tiles.push(`<button class="${cls.join(' ')}" data-act="tile" data-arg="${x},${y}">${u ? tokenHtml(s, u, u.id === sel?.id) : ''}</button>`);
+    }
+  }
+  const m = sel ? s.party.find((p) => p.id === sel.member)! : undefined;
+  const special = !sel ? '' :
+    sel.member === 'oswin' ? cbtn('guard', 'Guard', 'draw them to you') :
+    sel.member === 'sefa' ? cbtn('knife', `Knife ×${c.uses.knife}`, 'throw, range 4', c.uses.knife <= 0, c.mode === 'knife') :
+    cbtn('poultice', `Poultice ×${c.uses.poultice}`, 'heal beside her', c.uses.poultice <= 0, c.mode === 'poultice');
+  const hint = !sel ? '' :
+    c.mode === 'knife' ? 'Tap a foe in sight to throw.' :
+    c.mode === 'poultice' ? 'Tap Mael or someone beside her.' :
+    sel.moved ? `${first(m!.name)} has moved. Strike a foe beside them, or act.` :
+    `${first(m!.name)}: tap a lit tile to move, a foe beside them to strike.`;
+  return `
+    <section class="combat">
+      <div class="chead"><h1>${esc(c.title)}</h1><span class="sub">Round ${c.round}</span></div>
+      <div class="board">${tiles.join('')}</div>
+      <p class="chint">${esc(hint)}</p>
+      <div class="cbar">
+        ${special}
+        ${cbtn('defend', 'Defend', 'brace, catch breath', !sel)}
+        ${cbtn('wait', 'Wait', 'end this one\'s turn', !sel)}
+      </div>
+      <div class="cbar">
+        ${cbtn('end-turn', 'End turn', '')}
+        ${cbtn('retreat', 'Retreat', '')}
+        ${cbtn('auto', 'Let it play out', '')}
+      </div>
+      <div class="clog">${c.log.slice(-4).map((l) => `<div>${esc(l)}</div>`).join('')}</div>
+    </section>
+    ${partyHtml(s)}`;
+}
+
+function tokenHtml(s: GameState, u: Unit, selected: boolean): string {
+  const c = s.combat!;
+  let pct: number;
+  let color: string;
+  if (u.side === 'party') {
+    const m = s.party.find((p) => p.id === u.member)!;
+    pct = (m.health / m.maxHealth) * 100;
+    color = m.color;
+  } else {
+    pct = (u.hp / u.maxHp) * 100;
+    color = '#b04a3a';
+  }
+  const cls = ['token', `side-${u.side}`, selected ? 'sel' : '', u.side === 'party' && u.acted ? 'done' : '', c.hits.includes(u.id) ? 'hit' : '', u.guard ? 'guard' : ''];
+  return `<span class="${cls.join(' ')}" style="--tc:${color}"><b>${esc(u.glyph)}</b><i style="width:${Math.max(0, pct)}%"></i></span>`;
+}
+
+function cbtn(act: string, label: string, sub: string, disabled = false, on = false): string {
+  return `<button class="cact ${on ? 'on' : ''}" data-act="${act}" ${disabled ? 'disabled' : ''}><span>${label}</span>${sub ? `<small>${sub}</small>` : ''}</button>`;
+}
+
 function sceneHtml(s: GameState): string {
   const scene = s.scene ? SCENES[s.scene] : undefined;
   if (!scene) return '';
@@ -304,6 +378,7 @@ function render(): void {
     case 'camp': html = campHtml(s); break;
     case 'scene': html = sceneHtml(s); break;
     case 'chest': html = chestHtml(s); break;
+    case 'combat': html = combatHtml(s); break;
     case 'result': html = resultHtml(s); break;
     case 'defeat': html = defeatHtml(s); break;
     case 'end': html = endHtml(s); break;
@@ -311,6 +386,7 @@ function render(): void {
   }
   if (showMap) html += mapHtml(s);
   app.innerHTML = html;
+  document.body.classList.toggle('in-combat', s.screen === 'combat');
   clockEl.textContent = clock(s.minutes);
 }
 
@@ -383,6 +459,34 @@ document.addEventListener('click', (e) => {
       break;
     }
     case 'leave-chest': leaveChest(s); break;
+    case 'tile': {
+      const c = s.combat;
+      if (!c) break;
+      const [x, y] = arg.split(',').map(Number);
+      const u = unitAt(s, c, x, y);
+      const sel = c.selected;
+      if (sel && c.mode === 'knife' && u?.side === 'foe') throwKnife(s, sel, u.id);
+      else if (sel && c.mode === 'poultice' && u?.side === 'party') poultice(s, sel, u.id);
+      else if (u?.side === 'party') select(s, u.id);
+      else if (sel && u?.side === 'foe') engage(s, sel, u.id);
+      else if (sel && !u) moveTo(s, sel, x, y);
+      settleCombat(s);
+      return commit(s.screen !== 'combat');
+    }
+    case 'guard': case 'defend': case 'wait': case 'knife': case 'poultice': case 'end-turn': case 'retreat': case 'auto': {
+      const c = s.combat;
+      if (!c) break;
+      const sel = c.selected ?? '';
+      if (act === 'guard') guard(s, sel);
+      else if (act === 'defend') defend(s, sel);
+      else if (act === 'wait') wait(s, sel);
+      else if (act === 'knife' || act === 'poultice') setMode(s, act);
+      else if (act === 'end-turn') endPartyPhase(s);
+      else if (act === 'retreat') retreat(s);
+      else autoResolve(s);
+      settleCombat(s);
+      return commit(s.screen !== 'combat');
+    }
     case 'continue': continueOn(s); break;
     case 'rise': {
       const r = riseAgain(s);

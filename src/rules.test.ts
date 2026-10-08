@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EDGES, legMinutes, node, NODES } from './content/road';
 import { arrivalScene, SCENES } from './content/scenes';
-import { camp, choose, continueOn, presentScene, riseAgain, stayAtInn, travel } from './game';
+import { autoResolve } from './combat';
+import { camp, choose, continueOn, presentScene, riseAgain, settleCombat, stayAtInn, travel } from './game';
 import {
   CAMP_HEALTH_CAP, campEncounterChance, clock, damage, drain, fight, hoursUntilMorning, passTime, roadEncounterChance, WALK_DRAIN,
 } from './rules';
@@ -125,6 +126,10 @@ describe('game flow', () => {
     while (s.queue.length && s.queue[0].startsWith('enc:')) {
       continueOn(s);
       choose(s, 0);
+      if (s.screen === 'combat') {
+        autoResolve(s);
+        settleCombat(s);
+      }
     }
     continueOn(s);
     expect(s.scene).toBe('tithe-road');

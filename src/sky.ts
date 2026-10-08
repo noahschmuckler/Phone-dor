@@ -171,6 +171,8 @@ export function drawSky(cv: HTMLCanvasElement, s: GameState, t: number): void {
   // Labels and compass.
   ctx.textAlign = 'center';
   ctx.font = '9px "EB Garamond", Georgia, serif';
+  if (H < 100) return;
+
   // Nearest karsts claim label space first; others drop to a second row or go unlabelled.
   const placed: [number, number, number][] = [];
   for (const { k, d } of [...ks].reverse()) {
