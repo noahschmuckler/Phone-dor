@@ -1,8 +1,10 @@
 import './style.css';
 import { bearing, compassWord, EDGES, KARSTS, legMinutes, neighbours, node, NODES } from './content/road';
+import { CHESTS, chestAt, chestById, isOpen, startPositions, wheelsFor } from './content/chests';
 import { SCENES } from './content/scenes';
 import {
-  buyRation, camp, choose, continueOn, fmtHours, innCost, lookAround, riseAgain, setOut, startChapter, stayAtInn, travel,
+  buyRation, camp, choose, continueOn, fmtHours, innCost, leaveChest, lookAround, openChest, riseAgain, setOut, startChapter,
+  stayAtInn, travel, tryChest,
 } from './game';
 import { clock, conscious, hoursUntilMorning, isNight } from './rules';
 import { drawSky } from './sky';
@@ -16,6 +18,7 @@ let S: GameState | null = load();
 let titleScreen = true;
 let showMap = false;
 const campUi = { hours: 8, fire: true, watch: 'oswin' as MemberId | null };
+const chestUi = { pos: [] as number[], msg: '', shake: false };
 
 const TITLE_SKY: GameState = { ...startChapter(1), minutes: 19 * 60 + 40, node: 'shrine' };
 
@@ -86,6 +89,7 @@ function roadHtml(s: GameState): string {
     btn('camp-open', 'Make camp', here.ward ? 'warded ground' : 'rest, watch, fire'),
     inn !== null ? btn('inn', 'Take rooms at the inn', `${inn} coin · until morning`, '', s.coin < inn) : '',
     price !== undefined ? btn('buy', 'Buy a ration', `${price} coin`, '', s.coin < price) : '',
+    ...chestAt(s.node).filter((c) => !isOpen(s, c.id)).map((c) => btn('chest', 'A word-locked chest', `${c.answer.length} wheels`, c.id)),
     SCENES[s.node] && REVISIT.has(s.node) ? btn('look', 'Look around') : '',
     btn('map', 'Map'),
   ].join('');
@@ -132,6 +136,33 @@ function campHtml(s: GameState): string {
     <div class="actions">
       ${btn('camp', 'Sleep', `${campUi.hours} hours`)}
       ${btn('back', 'Not yet')}
+    </div>`;
+}
+
+function chestHtml(s: GameState): string {
+  const chest = s.chest ? chestById(s.chest) : undefined;
+  if (!chest) return '';
+  const wheels = wheelsFor(chest);
+  if (chestUi.pos.length !== wheels.length) chestUi.pos = startPositions(chest);
+  const n = (w: string[], i: number) => w[((i % w.length) + w.length) % w.length];
+  const tries = s.flags[`tries:${chest.id}`] ?? 0;
+  return `
+    <section class="place scene"><h1>A word-locked chest</h1><p class="desc">${esc(chest.desc)}</p></section>
+    <div class="riddle">${chest.riddle.map((l) => `<p>${esc(l)}</p>`).join('')}</div>
+    <div class="wheels ${chestUi.shake ? 'shake' : ''}">${wheels
+      .map((w, i) => {
+        const p = chestUi.pos[i];
+        return `<div class="wheel" data-wheel="${i}">
+          <button class="spin" data-act="wheel" data-arg="${i}:-1" aria-label="previous letter">▲</button>
+          <div class="drum"><span class="ghost">${n(w, p - 1)}</span><b>${n(w, p)}</b><span class="ghost">${n(w, p + 1)}</span></div>
+          <button class="spin" data-act="wheel" data-arg="${i}:1" aria-label="next letter">▼</button>
+        </div>`;
+      })
+      .join('')}</div>
+    <p class="lockmsg">${esc(chestUi.msg) || (tries ? `${tries} wrong ${tries === 1 ? 'try' : 'tries'}. The lock does not mind. It has time.` : 'Swipe or tap the wheels to spell the answer.')}</p>
+    <div class="actions">
+      ${btn('try', 'Try the lock')}
+      ${btn('leave-chest', 'Leave it for now')}
     </div>`;
 }
 
@@ -219,6 +250,7 @@ function endHtml(s: GameState): string {
       <p class="note">You reached Anviltooth on ${clock(s.minutes)}, with ${s.rations} rations and ${s.coin} coin. The land is ${chaosWord(s.chaos)}.</p>
       ${learned.length ? `<h2>What you carry back to the Ledger</h2><ul class="learned">${learned.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="note">You learned little on the road. Perhaps you walked it too fast.</p>'}
       ${(s.flags.mercy ?? 0) > 0 ? `<p class="note">You were kind ${s.flags.mercy} time${s.flags.mercy > 1 ? 's' : ''}. In a fraying land, someone will remember.</p>` : ''}
+      <p class="note">Word-locked chests opened: ${CHESTS.filter((c) => isOpen(s, c.id)).length} of ${CHESTS.length}.</p>
       <p class="note">Chapter Two is not yet written.</p>
       <div class="actions">${btn('new', 'Walk it again')}</div>
     </section>`;
@@ -271,6 +303,7 @@ function render(): void {
     case 'road': html = roadHtml(s); break;
     case 'camp': html = campHtml(s); break;
     case 'scene': html = sceneHtml(s); break;
+    case 'chest': html = chestHtml(s); break;
     case 'result': html = resultHtml(s); break;
     case 'defeat': html = defeatHtml(s); break;
     case 'end': html = endHtml(s); break;
@@ -324,6 +357,32 @@ document.addEventListener('click', (e) => {
     case 'buy': buyRation(s); return commit(false);
     case 'look': lookAround(s); break;
     case 'choose': choose(s, Number(arg)); break;
+    case 'chest':
+      chestUi.pos = [];
+      chestUi.msg = '';
+      openChest(s, arg);
+      break;
+    case 'wheel': {
+      const [i, d] = arg.split(':').map(Number);
+      spinWheel(i, d);
+      return commit(false);
+    }
+    case 'try': {
+      const chest = s.chest ? chestById(s.chest) : undefined;
+      if (!chest) break;
+      const wheels = wheelsFor(chest);
+      const word = wheels.map((w, i) => w[((chestUi.pos[i] % w.length) + w.length) % w.length]).join('');
+      if (!tryChest(s, word)) {
+        chestUi.msg = 'The wheels turn, and the lock holds.';
+        chestUi.shake = true;
+        commit(false);
+        chestUi.shake = false;
+        return;
+      }
+      chestUi.pos = [];
+      break;
+    }
+    case 'leave-chest': leaveChest(s); break;
     case 'continue': continueOn(s); break;
     case 'rise': {
       const r = riseAgain(s);
@@ -334,6 +393,27 @@ document.addEventListener('click', (e) => {
     case 'map-close': showMap = false; return commit(false);
   }
   commit();
+});
+
+function spinWheel(i: number, d: number): void {
+  chestUi.pos[i] = (chestUi.pos[i] ?? 0) + d;
+  chestUi.msg = '';
+}
+
+// Swipe a wheel up or down to turn it.
+let swipe: { wheel: number; y: number } | null = null;
+document.addEventListener('pointerdown', (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>('.wheel');
+  swipe = el && !(e.target as HTMLElement).closest('.spin') ? { wheel: Number(el.dataset.wheel), y: e.clientY } : null;
+});
+document.addEventListener('pointerup', (e) => {
+  if (!swipe) return;
+  const dy = e.clientY - swipe.y;
+  if (Math.abs(dy) > 18) {
+    spinWheel(swipe.wheel, dy < 0 ? 1 : -1);
+    commit(false);
+  }
+  swipe = null;
 });
 
 // Sky animation, throttled; it only runs while the page is visible.

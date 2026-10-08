@@ -1,6 +1,7 @@
 // Player actions. Each mutates the state and leaves it on the screen to show next.
 
 import { bearing, compassWord, legMinutes, neighbours, node } from './content/road';
+import { chestById, isOpen } from './content/chests';
 import { arrivalScene, pickEncounter, SCENES } from './content/scenes';
 import {
   campEncounterChance, conscious, DAY, isNight, partyDown, passTime, roadEncounterChance,
@@ -173,4 +174,31 @@ export function riseAgain(s: GameState): GameState | null {
   r.result = undefined;
   note(r, 'You came to, sore and lucky.');
   return r;
+}
+
+export function openChest(s: GameState, id: string): void {
+  const chest = chestById(id);
+  if (!chest || chest.node !== s.node || isOpen(s, id)) return;
+  s.chest = id;
+  s.screen = 'chest';
+}
+
+/** Try a word on the current chest. Returns false if the lock holds. */
+export function tryChest(s: GameState, word: string): boolean {
+  const chest = s.chest ? chestById(s.chest) : undefined;
+  if (!chest || isOpen(s, chest.id)) return false;
+  if (word.toUpperCase() !== chest.answer) {
+    s.flags[`tries:${chest.id}`] = (s.flags[`tries:${chest.id}`] ?? 0) + 1;
+    return false;
+  }
+  s.flags[`chest:${chest.id}`] = 1;
+  s.chest = undefined;
+  note(s, `Opened a word-locked chest: ${chest.answer}.`);
+  show(s, chest.answer, ['The last wheel clicks home. The lid gives.', ...chest.open(s)]);
+  return true;
+}
+
+export function leaveChest(s: GameState): void {
+  s.chest = undefined;
+  s.screen = 'road';
 }

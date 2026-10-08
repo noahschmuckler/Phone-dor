@@ -51,7 +51,7 @@ export const KARSTS: Karst[] = [
 export const NODES: RoadNode[] = [
   {
     id: 'moot-gate', name: 'The Ledger Gate', x: 2, y: 0, danger: 0, rationPrice: 1, inn: { price: 1 },
-    desc: 'Behind you the Moot climbs out of the mist, terrace on terrace of archive-halls. Clerks in grey lean from the windows to watch you go. Ahead, the Anvil Road runs east through stubble fields.',
+    desc: 'Behind you the Moot climbs out of the mist, terrace on terrace of archive-halls. Clerks in grey lean from the windows to watch you go. Ahead, the Anvil Road runs east through stubble fields. Over the gate, seven old letters are cut into the karst, worn almost smooth: D·E·L·I·V·E·R. The clerks say they read differently from the cellars.',
     night: 'The archive lamps burn late. Someone up there is still counting.',
   },
   {

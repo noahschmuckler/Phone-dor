@@ -18,7 +18,7 @@ export interface Member {
   taint: number;
 }
 
-export type Screen = 'title' | 'chapter' | 'road' | 'camp' | 'scene' | 'result' | 'defeat' | 'end';
+export type Screen = 'title' | 'chapter' | 'road' | 'camp' | 'scene' | 'chest' | 'result' | 'defeat' | 'end';
 
 export interface Result {
   title: string;
@@ -41,6 +41,8 @@ export interface GameState {
   screen: Screen;
   /** Scene currently shown on the 'scene' screen. */
   scene?: string;
+  /** Chest currently shown on the 'chest' screen. */
+  chest?: string;
   result?: Result;
   /** Scenes waiting to play after the current result is dismissed. */
   queue: string[];
