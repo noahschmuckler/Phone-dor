@@ -102,12 +102,12 @@ DiggyDwarves/Rootwake docs. **[proposal]** = suggested here, not yet confirmed.
 | Hero | Name | Karst | Domain | Era of Phone-dor: its karst-city |
 |---|---|---|---|---|
 | Cultivator / Earth Mother | **Hulda** [canon] | Greencrown | the natural world, growth | [proposal] grain abbeys and orchard-monks. Farmers still pray to the sleeping statue for harvests, and the harvests are failing |
-| Artificer | [open] | Dynamo | lightning, light | [proposal] lamp-keepers. The only city that still lights its streets at night, and the lamps keep going dark |
-| Smith | [open] | Anviltooth | metal, the forge | [proposal] a guild-monastery of smiths. The best steel in the world, rationed out to whoever pays |
-| Steward | [open] | **The Moot** | governance | [canon] **bureaucracy. The books are kept on every facet of everything** |
-| Mason | [open] | Wallspire | building | [proposal] a builders' order. Their bridges and walls hold the roads together, and the masonry is starting to fail |
-| Alchemist | [open] | Emberflask | alchemy, chaos-antidote | [proposal] apothecary cloisters. The only cures for chaos taint come from here |
-| Sage | [open] | The Hush | memory, dreams, glyphs | [canon] mystics. [proposal] in this era they are still lucid. The lotus is only beginning to take hold |
+| Artificer | **Delvin** [canon] | Dynamo | lightning, light | [proposal] lamp-keepers. The only city that still lights its streets at night, and the lamps keep going dark |
+| Smith | **Vrak** [canon] | Anviltooth | metal, the forge | [proposal] a guild-monastery of smiths. The best steel in the world, rationed out to whoever pays |
+| Steward | **Sigvard** [canon] | **The Moot** | governance | [canon] **bureaucracy. The books are kept on every facet of everything** |
+| Mason | **Vraken** [canon] | Wallspire | building | [proposal] a builders' order. Their bridges and walls hold the roads together, and the masonry is starting to fail |
+| Alchemist | **Anatol** [canon] | Emberflask | alchemy, chaos-antidote | [proposal] apothecary cloisters. The only cures for chaos taint come from here |
+| Sage (history & memory) | **Sigrun** [canon] | The Hush | memory, dreams, glyphs | [canon] mystics. [proposal] in this era they are still lucid. The lotus is only beginning to take hold |
 | **The Eighth** | **Delvira** [canon] | **The Keystone** | all seven, steeped in chaos | [canon] **the city of thieves** (§4) |
 
 - **[canon]** The other seven cities are smaller and specialized, with **more of a
@@ -115,8 +115,16 @@ DiggyDwarves/Rootwake docs. **[proposal]** = suggested here, not yet confirmed.
 - **[repo]** Between incarnations a hero sleeps as a **dwarf-shaped stone statue**
   on top of their karst. Medieval people know these as relics, shrines and
   pilgrimage sites.
-- **[open]** The six other heroes' names are recorded in the designer's other
-  Claude projects, which this repo can't see. Paste them in to fill the table.
+- **[canon]** Names and souls come from the designer's series bible, *The Eight —
+  Character Codex*. The codex holds the full soul profiles, the group's roles
+  around Delvira (Sigrun and Sigvard as architects, Vrak and Vraken as enforcers,
+  Anatol as the witness, Hulda as false comfort, Delvin as the absent one) and
+  the DELIVER/REVILED wordplay inside **DELVIRA**.
+- **[proposal]** In Phone-dor the people know none of that. They know the
+  legends: kind Hulda, Vrak in shining armour, clever Delvin and his airships,
+  Anatol the healer. The codex's darker truths are for players who dig, through
+  Moot ledgers (Sigrun's habit of keeping records echoes there) and the Hush's
+  archives.
 
 ### Living memory **[canon]**
 
@@ -251,8 +259,8 @@ show up as a ruin Hulda finds centuries later.
 2. ~~The dragons and the eight~~ **settled:** some of the seven's essences
    returned to their old dragon bodies. Still open: which heroes, and do the
    dragons know what they are?
-3. **The other six heroes' names** (in the designer's other projects), and the
-   colour each one owns (DiggyDwarves has ROYGBIV unassigned).
+3. ~~The heroes' names~~ **settled** (see the codex). The codex palette gives each
+   hero a colour; use it for UI accents.
 4. **The Keystone city's name**, and whether the Keystone is the spire or the city.
 5. **The timing** in §5 (about three generations after the hurling) is inferred.
    Confirm it.
